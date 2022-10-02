@@ -5,9 +5,10 @@
 #define FONT_L 1
 #define FONT_M 0
 
-#define MOVE_NONE 	0
-#define MOVE_UP 1
-#define MOVE_DOWN  2
+#define MOVE_NONE 	0x00
+#define MOVE_UP     0x01
+#define MOVE_DOWN   0x02
+#define MOVE_LEFT   0x04
 
 struct font_info
 {
@@ -77,7 +78,7 @@ void combine_bitmap(char *dst_bitmap , char *src_bitmap , int size , int type)
     unsigned short tmp=0;
     printf("combine_bitmap %d\n",type);
 
-    if( type==1 ) //move up, shift left //only hat need move up, hat is on the high byte
+    if( type & MOVE_UP ) //move up, shift left //only hat need move up, hat is on the high byte
     {
         for( i=1;i<size;i=i+4)
         {
@@ -88,7 +89,8 @@ void combine_bitmap(char *dst_bitmap , char *src_bitmap , int size , int type)
 			src_bitmap[i+1]=tmp;			
         }    
     }    
-    else if( type==2 ) //move down, shift right //only shoe need move down, hat is on the high byte
+    //else 
+    if( type & MOVE_DOWN ) //move down, shift right //only shoe need move down, hat is on the high byte
     {
         for( i=3;i<size;i=i+4)
         {
@@ -103,7 +105,22 @@ void combine_bitmap(char *dst_bitmap , char *src_bitmap , int size , int type)
 			src_bitmap[i+1]=tmp;
         }
     }
-
+    //else 
+    if( type & MOVE_LEFT ) //move down, shift right //only shoe,hat need move left 
+    {
+        
+        for( i=1;i<size;i++)
+        {
+            if(i < (size-4))
+            {
+			    src_bitmap[i]=src_bitmap[i+4];
+			    
+            }
+            else
+                src_bitmap[i]=0;
+        }
+    }
+    
     for( i=0 ; i< size ; ++i)
     {
         dst_bitmap[i]=dst_bitmap[i] | src_bitmap[i];
@@ -114,15 +131,17 @@ void combine_bitmap(char *dst_bitmap , char *src_bitmap , int size , int type)
 void show_font(char *bitmap , int type)
 {
     int i=0 , j=0;
-
+    int print_size=0;
 	if(type > 1 )
 	{
 		printf("No define.\n");
 		return ;		
 	}
-	printf("You select FONT size = %d \n",FONT_INFO[type].font_size); 
+    print_size = ((bitmap[0] * FONT_INFO[type].font_width)+7) & 0xFFFFFFF8 ;
+	printf("You select FONT size =  %d %d \n",bitmap[0],print_size); 
 
-    for(i=1; i<(FONT_INFO[type].font_size); i++)
+
+    for(i=1; i<(print_size+1); i++)
     {
         for(j=7; j>-1; j--)
         {
@@ -142,6 +161,7 @@ void show_font(char *bitmap , int type)
 
 void get_bitmap(int type, char *bitmap , short *unicode , int action)
 {
+
     char *tmp_bitmap=(char *)malloc(FONT_INFO[type].font_size);
     memset(tmp_bitmap, 0, FONT_INFO[type].font_size);
     get_data_from_resource(type ,tmp_bitmap,*unicode);
@@ -152,12 +172,13 @@ void get_bitmap(int type, char *bitmap , short *unicode , int action)
 
     // show_font(bitmap,type);
     // memset(bitmap, 0, sizeof(137));
-    // combine_bitmap(bitmap,tmp_bitmap,137,1);
+    // combine_bitmap(bitmap,tmp_bitmap,137,3);
 	// show_font(bitmap,type);
 	// memset(bitmap, 0, 137);
     // combine_bitmap(bitmap,tmp_bitmap,137,2);    
 	// show_font(bitmap,type);
 	// show_font(tmp_bitmap,type);   
+    
     #if 1
     //printf(" get unicode %x %x\n", *unicode,*(unicode+1));
     if(*(unicode+1) >= 0x0e38 && *(unicode+1) <= 0x0e39) // shoe
@@ -229,7 +250,7 @@ int main(void)
     printf("strlen %ld size %ld \n",strlen(show_string[2][0]),sizeof(show_string));
     memset(bitmap, 0, FONT_INFO[type].font_size);
 
-    ptr=(short *)show_string[4][0];    
+    ptr=(short *)show_string[3][0];    
 
 #if 1
     while(*ptr!=0)     
