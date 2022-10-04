@@ -10,6 +10,7 @@
 #define MOVE_UP             0x01
 #define MOVE_DOWN           0x02
 #define MOVE_LEFT           0x04
+#define MOVE_RIGHT          0x08
 
 struct font_info
 {
@@ -73,23 +74,28 @@ void get_data_from_resource(int type,char *bitmap ,short unicode_addr)
 }
 
 
-void combine_bitmap(char *dst_bitmap , char *src_bitmap , int font_index , int type)
+void combine_bitmap(char *dst_bitmap , char *src_bitmap , int font_index , int type ,char shift_size)
 {
     int i=0,j=0;
     unsigned short tmp=0;
-    unsigned int lowpart_start;
+    //unsigned int lowpart_start;
+    unsigned int move_start;
     
-    lowpart_start = FONT_INFO[font_index].font_width - 2 + 1;
-    printf("combine_bitmap %d lowpart start %d\n",type,lowpart_start);
+    if(type & SHIFT_LOWPART)
+        move_start = FONT_INFO[font_index].font_width - 2 + 1;  
+    else
+        move_start = 1;    
+
+    printf("combine_bitmap action %x start %d\n",type, move_start);
     // high part start start on index 1
     // low  part
     if( type & MOVE_UP ) //move up, shift left //only hat need move up, hat is on the high part
     {
-        for( i=1;i<FONT_INFO[font_index].font_size;i=i+FONT_INFO[font_index].font_width)
+        for( i=move_start;i<FONT_INFO[font_index].font_size;i=i+FONT_INFO[font_index].font_width)
         {
 			tmp=(unsigned char)src_bitmap[i]; 
 			tmp=tmp << 8 |(unsigned char)src_bitmap[i+1];
-			tmp =tmp << 1;
+			tmp =tmp << (shift_size & 0x0F);
 			src_bitmap[i]=tmp>>8;
 			src_bitmap[i+1]=tmp;			
         }    
@@ -97,14 +103,14 @@ void combine_bitmap(char *dst_bitmap , char *src_bitmap , int font_index , int t
     //else 
     if( type & MOVE_DOWN ) //move down, shift right //only shoe need move down, hat is on the high part
     {
-        for( i=lowpart_start;i<FONT_INFO[font_index].font_size;i=i+FONT_INFO[font_index].font_width)
+        for( i=move_start;i<FONT_INFO[font_index].font_size;i=i+FONT_INFO[font_index].font_width)
         {
 
 			tmp=(unsigned char)src_bitmap[i]; 
 			tmp=tmp << 8 |(unsigned char)src_bitmap[i+1];
 			//printf("bef shift right %x \n" ,tmp);
             //printf("SRC shift right %x %x \n" ,(unsigned char)src_bitmap[i],(unsigned char)src_bitmap[i+1]);
-            tmp =tmp >> 1;
+            tmp =tmp >> (shift_size & 0x0F);
 			//printf("after shift right %x \n" ,tmp);
 			src_bitmap[i]=tmp>>8;
 			src_bitmap[i+1]=tmp;
@@ -113,18 +119,38 @@ void combine_bitmap(char *dst_bitmap , char *src_bitmap , int font_index , int t
     //else 
     if( type & MOVE_LEFT ) //move left, only shoe,hat need move left // shift all byte x = x+(font_width)
     {
-        
+        src_bitmap[0] = (src_bitmap[0]>(shift_size>>4))?(src_bitmap[0]-(shift_size>>4)):src_bitmap[0]; 
+        printf("bef shift left %d \n" ,(shift_size>>4));
         for( i=1;i<FONT_INFO[font_index].font_size;i++)
         {
-            if(i < (FONT_INFO[font_index].font_size-FONT_INFO[font_index].font_width))
+            if(i < (FONT_INFO[font_index].font_size - (FONT_INFO[font_index].font_width)*(shift_size>>4)))
             {
-			    src_bitmap[i]=src_bitmap[i+FONT_INFO[font_index].font_width];
+			    src_bitmap[i]=src_bitmap[i+(FONT_INFO[font_index].font_width*(shift_size>>4))];
 			    
             }
             else
                 src_bitmap[i]=0;
         }
     }
+
+    if( type & MOVE_RIGHT ) //move left, only shoe,hat need move left // shift all byte x = x+(font_width)
+    {
+        puts("\rmove right");
+        src_bitmap[0] = src_bitmap[0]+ (shift_size>>4);           
+        for( i=FONT_INFO[font_index].font_size;i>=1;i--)
+        {
+            
+            if(i <= (FONT_INFO[font_index].font_width*(shift_size>>4)))
+            {
+			    src_bitmap[i]=0;			    
+            }
+            else
+            {
+                src_bitmap[i]=src_bitmap[i-FONT_INFO[font_index].font_width*(shift_size>>4)];
+            }    
+        }        
+    }  
+    
     dst_bitmap[0] = (dst_bitmap[0] > src_bitmap[0])?dst_bitmap[0]:src_bitmap[0];
     for( i=1 ; i< FONT_INFO[font_index].font_size ; ++i)
     {
@@ -164,14 +190,14 @@ void show_font(char *bitmap , int type)
 }
 
 
-void get_bitmap(int font_type, char *bitmap ,short main_font,short *unicode , int action)
+void get_bitmap(int font_type, char *bitmap, short main_font, short *unicode, int action, char shift_size)
 {
-
+    char merge_shift = 0 ;
     char *tmp_bitmap=(char *)malloc(FONT_INFO[font_type].font_size);
     memset(tmp_bitmap, 0, FONT_INFO[font_type].font_size);
     get_data_from_resource(font_type ,tmp_bitmap,*unicode);
     //memcpy(bitmap, tmp_bitmap ,FONT_INFO[type].font_size);
-    combine_bitmap(bitmap,tmp_bitmap,font_type,action);
+    combine_bitmap(bitmap,tmp_bitmap,font_type,action, shift_size);
    
     offset++;
 
@@ -184,12 +210,16 @@ void get_bitmap(int font_type, char *bitmap ,short main_font,short *unicode , in
 	// show_font(bitmap,type);
 	// show_font(tmp_bitmap,type);   
     free(tmp_bitmap);
+
     #if 1
     //printf(" get unicode %x %x\n", *unicode,*(unicode+1));
     if(*(unicode+1) >= 0x0e38 && *(unicode+1) <= 0x0e39) // shoe
     {
         printf(" merge shoe \n");
-        get_bitmap(font_type,bitmap,main_font,unicode+1,MOVE_DOWN);
+        if(main_font == 0x0e23)
+            merge_shift = 2;
+        merge_shift = (merge_shift<<4) | 1;
+        get_bitmap(font_type,bitmap,main_font,unicode+1,SHIFT_LOWPART|MOVE_LEFT|MOVE_DOWN, merge_shift);
         //get_bitmap(font_type,bitmap, main_font,unicode+1,MOVE_DOWN|MOVE_LEFT);
         
     }
@@ -198,14 +228,24 @@ void get_bitmap(int font_type, char *bitmap ,short main_font,short *unicode , in
            ) 
     {
         printf(" merge hat \n"); 
-        //if(main_font == 0x)
-        get_bitmap(font_type,bitmap,main_font,unicode+1,MOVE_NONE);    
+        if(main_font == 0x0e1b || main_font == 0x0e1d || main_font == 0x0e1f)// main body ,   
+        {    
+            merge_shift = 2 << 4;
+            get_bitmap(font_type,bitmap,main_font,unicode+1,MOVE_LEFT, merge_shift); 
+        }
+        else if((*(unicode+1) == 0x0e33 ))
+        {
+            merge_shift = 6 << 4;
+            get_bitmap(font_type,bitmap,main_font,unicode+1,MOVE_RIGHT, merge_shift); 
+        }        
+        else        
+            get_bitmap(font_type,bitmap,main_font,unicode+1,MOVE_NONE, merge_shift);    
             //get_bitmap(font_type,bitmap,main_font,unicode+1,MOVE_UP);   
     }
     else if(*(unicode+1) >= 0x0e48 && *(unicode+1) <= 0x0e4B) //voice
     {
         printf(" merge voice \n");  
-        get_bitmap(font_type,bitmap,main_font,unicode+1,MOVE_NONE);      
+        get_bitmap(font_type,bitmap,main_font,unicode+1,MOVE_NONE, merge_shift);      
     }
     else
     {    
@@ -215,14 +255,16 @@ void get_bitmap(int font_type, char *bitmap ,short main_font,short *unicode , in
     #endif
 }
 
-//早安：อรณุ สวัสดิ์ （發音：阿倫莎瓦）\u0e2d\u0e23\u0e13\u0e38\u0020\u0e2a\u0e27\u0e31\u0e2a\u0e14\u0e34\u0e4c
-char* show_string[16][32]=
+//早安：อรุณ สวัสดิ์     \u0e2d\u0e23\u0e38\u0e13\u0020\u0e2a\u0e27\u0e31\u0e2a\u0e14\u0e34\u0e4c
+//沒關係：ไม่เป็นไรค่ะ \x0e\x44\x0e\x21\x0e\x48\x0e\x40\x0e\x1b\x0e\x47\x0e\x19\x0e\x44\x0e\x23\x0e\x04\x0e\x48\x0e\x30
+char* show_string[16][64]=
 {
         {"\x01\x0e\x00\x00"},
         {"\x02\x0e\x2d\x0e\x1a\x0e\x04\x0e\x13\x0e\x38\x0e\x04\x0e\x23\x0e\x31\x0e\x1A\x0e\x00\x00"},
-        {"\x13\x0e\x38\x0e\x00\x00"},//\x13\x0e
-        {"\x14\x0e\x34\x0e\x4c\x0e\x00\x00"}, 
-		{"\x2d\x0e\x23\x0e\x13\x0e\x38\x0e\x20\x00\x2a\x0e\x27\x0e\x31\x0e\x2a\x0e\x14\x0e\x34\x0e\x4c\x0e\x20\x00\x4c\x0e\x00\x00"}, //\x2a\x0e\x27\x0e\x31\x0e\x2a\x0e\x14\x0e\x34\x0e\x4c\x0e\x00\x00
+        {"\x21\x0e\x38\x0e\x48\x0e\x20\x00\x1e\x0e\x34\x0e\x48\x0e\x20\x00\x17\x0e\x31\x0e\x49\x0e\x00\x00"},//word test
+        {"\x2a\x0e\x33\x0e\x20\x00\x1b\x0e\x35\x0e\x20\x00\x1b\x0e\x47\x0e\x20\x00\x23\x0e\x38\x0e\x20\x00\x23\x0e\x39\x0e\x49\x0e\x00\x00"}, //word test| สำ  ปี  ป็  รุ  รู้ 
+		{"\x2d\x0e\x23\x0e\x38\x0e\x13\x0e\x20\x00\x2a\x0e\x27\x0e\x31\x0e\x2a\x0e\x14\x0e\x34\x0e\x4c\x0e\x00\x00"}, //早安
+        {"\x2a\x0e\x33\x0e\x44\x0e\x21\x0e\x48\x0e\x40\x0e\x1b\x0e\x47\x0e\x19\x0e\x44\x0e\x23\x0e\x04\x0e\x48\x0e\x30\x0e\x00\x00"}, //沒關係
 };
 
 
@@ -259,14 +301,25 @@ int main(void)
     printf("strlen %ld size %ld \n",strlen(show_string[2][0]),sizeof(show_string));
     memset(bitmap, 0, FONT_INFO[type].font_size);
 
-    ptr=(short *)show_string[4][0];    
+    printf("Please select display array index :");
+ 	scanf("%d", &i);
+    if(i >= 0 && i <= 9)
+    {    
+        printf("index = %d \n",i);
+        ptr=(short *)show_string[i][0];    
+    }
+	else
+	{
+		printf("No define. %d \n",i);
+		return 0;
+	}   
 
 #if 1
     while(*ptr!=0)     
     {
         offset = 0;
         memset(bitmap, 0, FONT_INFO[type].font_size);
-        get_bitmap(type,bitmap,*ptr,ptr,MOVE_NONE);    
+        get_bitmap(type,bitmap,*ptr,ptr,MOVE_NONE,0);    
         show_font(bitmap,type);
         
         ptr+=offset;
