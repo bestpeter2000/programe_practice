@@ -260,8 +260,8 @@ void get_bitmap(int font_type, char *bitmap, short main_font, short *unicode, in
         printf(" merge shoe \n");
         // if(main_font == 0x0e23)
             // merge_shift = 2;
-        // command = SHIFT_LOWPART|MOVE_DOWN;
-        // merge_shift = (merge_shift<<4) | 1;
+        command = SHIFT_LOWPART|MOVE_DOWN;
+        merge_shift = (merge_shift<<4) | 1;
         get_bitmap(font_type,bitmap,main_font,unicode+1, command, merge_shift ,separate_shift);
         //get_bitmap(font_type,bitmap, main_font,unicode+1,MOVE_DOWN|MOVE_LEFT);
         
@@ -278,29 +278,20 @@ void get_bitmap(int font_type, char *bitmap, short main_font, short *unicode, in
             {
                 if(font_type==0)
                 {    
-                    merge_shift = 5 << 4;
-                    if(main_font == 0x0e1f)
-                    {
-                        separate_shift = 9 ;
-                        separate_shift = (separate_shift << 8) |  2; 
-                    }    
-                    else
-                    {        
-                        separate_shift = 9 ;
-                        separate_shift = (separate_shift << 8) | (2 << 4);
-                    }                      
+                    merge_shift = 4 << 4;
+                    
                 }    
                 else
                 {    
-                    merge_shift = 7 << 4;
+                    merge_shift = 6 << 4;
                     if(main_font == 0x0e1f)
                     {
-                        separate_shift = 11 ;
+                        separate_shift = 9 ;
                         separate_shift = (separate_shift << 8) |  2; 
                     }    
                     else
                     {        
-                        separate_shift = 11 ;
+                        separate_shift = 9 ;
                         separate_shift = (separate_shift << 8) | (2 << 4);
                     }    
                 }    
